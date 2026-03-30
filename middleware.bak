@@ -1,0 +1,17 @@
+import { proxy } from "./proxy";
+
+// Delegate all logic to proxy.ts (session refresh + route protection)
+export const middleware = proxy;
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths EXCEPT:
+     * - _next/static  (Next.js static assets)
+     * - _next/image   (Next.js image optimisation)
+     * - favicon.ico
+     * - Public image files (png, jpg, svg, webp, ico)
+     */
+    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
+};
