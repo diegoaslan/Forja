@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,13 +10,40 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { login } from "@/lib/actions/auth";
-import type { ActionState } from "@/types";
 
 export function LoginForm() {
-  const [state, formAction, isPending] = useActionState<
-    ActionState | null,
-    FormData
-  >(login, null);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (isPending) return;
+
+    setIsPending(true);
+    setError(null);
+
+    console.log("[LoginForm] submetendo...");
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      const result = await login(null, formData);
+      console.log("[LoginForm] resultado:", result);
+
+      if (result?.error) {
+        setError(result.error);
+        setIsPending(false);
+      } else {
+        // Sucesso — atualiza cache do servidor e navega para home
+        router.refresh();
+        router.push("/home");
+      }
+    } catch (err) {
+      console.error("[LoginForm] exceção:", err);
+      setError("Erro inesperado. Tente novamente.");
+      setIsPending(false);
+    }
+  }
 
   return (
     <div className="space-y-6 pt-4">
@@ -28,12 +56,15 @@ export function LoginForm() {
 
       <Card className="border-0 card-shadow">
         <CardContent className="p-5">
-          <form action={formAction} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Mensagem de erro */}
-            {state?.error && (
-              <div className="flex items-start gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 text-sm text-destructive">
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-xl bg-destructive/10 px-3.5 py-3 text-sm text-destructive"
+              >
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{state.error}</span>
+                <span>{error}</span>
               </div>
             )}
 
@@ -71,7 +102,12 @@ export function LoginForm() {
               />
             </div>
 
-            <Button className="w-full" size="lg" disabled={isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={isPending}
+            >
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

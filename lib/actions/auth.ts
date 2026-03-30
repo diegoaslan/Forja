@@ -71,9 +71,9 @@ export async function login(
 
   if (supabaseError) return { error: supabaseError };
 
-  // redirect() must be called outside try/catch — it throws intentionally
-  console.log("[login] sucesso — redirecionando para /home");
-  redirect("/home");
+  // Sucesso — o redirect é feito pelo cliente para não depender de Server Action redirect
+  console.log("[login] sucesso");
+  return { success: "ok" };
 }
 
 export async function signup(
