@@ -40,7 +40,7 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={handleBackdrop}
     >
       <div
@@ -72,7 +72,7 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain pb-safe">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-safe">
           {children}
         </div>
       </div>
