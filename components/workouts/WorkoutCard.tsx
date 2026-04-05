@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Dumbbell, Clock, ChevronRight, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { countTotalSets } from "@/lib/mock-workouts";
 import type { Workout } from "@/lib/mock-workouts";

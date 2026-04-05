@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Clock, Dumbbell, Layers } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { countTotalSets } from "@/lib/mock-workouts";
 import type { Workout } from "@/lib/mock-workouts";

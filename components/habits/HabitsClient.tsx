@@ -38,11 +38,19 @@ export function HabitsClient({ initialHabits, initialLogs }: HabitsClientProps) 
   const weekGrid = store.weekGrid();
 
   const handleToggle = useCallback(
-    (habitId: string) => {
+    async (habitId: string) => {
+      // Snapshot antes da atualização optimista para permitir rollback
+      const prevLogs = useHabitsStore.getState().logs;
       store.toggleToday(habitId);
       const { logs, today } = useHabitsStore.getState();
       const log = logs.find((l) => l.habitId === habitId && l.date === today);
-      toggleHabitLog(habitId, today, log?.completed ?? true).catch(() => {});
+      try {
+        await toggleHabitLog(habitId, today, log?.completed ?? true);
+      } catch (err) {
+        console.error("[HabitsClient] rollback toggle — falha ao salvar hábito:", err);
+        // Reverte o estado optimista para o valor anterior
+        useHabitsStore.setState({ logs: prevLogs });
+      }
     },
     [store]
   );

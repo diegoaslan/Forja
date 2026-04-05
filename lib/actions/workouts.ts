@@ -274,7 +274,8 @@ export async function createWorkout(data: {
     for (let i = 0; i < data.exercises.length; i++) {
       const ex = data.exercises[i];
 
-      // Find or create muscle group by name
+      // Muscle groups são dados globais (somente leitura para usuários).
+      // Apenas faz SELECT — nunca INSERT (RLS bloqueia escrita para usuários comuns).
       let muscleGroupId: string | null = null;
       if (ex.muscleGroupName.trim()) {
         const { data: existing } = await supabase
@@ -282,16 +283,7 @@ export async function createWorkout(data: {
           .select("id")
           .eq("name", ex.muscleGroupName.trim())
           .maybeSingle();
-        if (existing) {
-          muscleGroupId = existing.id;
-        } else {
-          const { data: created } = await supabase
-            .from("muscle_groups")
-            .insert({ id: crypto.randomUUID(), name: ex.muscleGroupName.trim() })
-            .select("id")
-            .single();
-          muscleGroupId = created?.id ?? null;
-        }
+        muscleGroupId = existing?.id ?? null;
       }
 
       // Find or create exercise by name
@@ -305,17 +297,24 @@ export async function createWorkout(data: {
       if (existingEx) {
         exerciseId = existingEx.id;
       } else {
-        const { data: createdEx } = await supabase
+        // user_id obrigatório: RLS exige user_id = auth.uid() no INSERT
+        const { data: createdEx, error: exErr } = await supabase
           .from("exercises")
-          .insert({ name: ex.name.trim(), muscle_group_id: muscleGroupId })
+          .insert({ user_id: user.id, name: ex.name.trim(), muscle_group_id: muscleGroupId })
           .select("id")
           .single();
+        if (exErr) {
+          console.error(`[createWorkout] falha ao criar exercício "${ex.name}":`, exErr.message);
+        }
         exerciseId = createdEx?.id ?? null;
       }
 
-      if (!exerciseId) continue;
+      if (!exerciseId) {
+        console.warn(`[createWorkout] exercício ignorado (sem id): "${ex.name}"`);
+        continue;
+      }
 
-      await supabase.from("workout_exercises").insert({
+      const { error: weErr } = await supabase.from("workout_exercises").insert({
         workout_id: workout.id,
         exercise_id: exerciseId,
         order_index: i,
@@ -324,6 +323,9 @@ export async function createWorkout(data: {
         rest_seconds: ex.restSeconds,
         default_weight_kg: ex.defaultWeightKg || null,
       });
+      if (weErr) {
+        console.error(`[createWorkout] falha ao vincular exercício "${ex.name}" ao treino:`, weErr.message);
+      }
     }
 
     return workout.id;
@@ -397,55 +399,63 @@ export interface FinishSessionExercise {
 /**
  * Closes the session + persists exercises and sets.
  * Called fire-and-forget — does not block the UI.
+ * Propaga erros para que o caller possa logá-los.
  */
 export async function finishWorkoutSession(
   sessionId: string,
   elapsedSeconds: number,
   exercises: FinishSessionExercise[],
 ): Promise<void> {
-  try {
-    const supabase = await createClient();
+  const supabase = await createClient();
 
-    // 1. Mark session as finished
-    await supabase
-      .from("workout_sessions")
-      .update({
-        finished_at: new Date().toISOString(),
-        elapsed_seconds: elapsedSeconds,
+  // 1. Mark session as finished
+  const { error: updateErr } = await supabase
+    .from("workout_sessions")
+    .update({
+      finished_at: new Date().toISOString(),
+      elapsed_seconds: elapsedSeconds,
+    })
+    .eq("id", sessionId);
+
+  if (updateErr) {
+    console.error("[finishWorkoutSession] falha ao fechar sessão:", updateErr.message);
+    throw new Error(`Falha ao fechar sessão: ${updateErr.message}`);
+  }
+
+  // 2. Persist exercises + sets sequentially (order matters)
+  for (const ex of exercises) {
+    const { data: seData, error: seErr } = await supabase
+      .from("workout_session_exercises")
+      .insert({
+        session_id: sessionId,
+        exercise_id: ex.exerciseId || null,
+        exercise_name: ex.exerciseName,
+        order_index: ex.orderIndex,
       })
-      .eq("id", sessionId);
+      .select("id")
+      .single();
 
-    // 2. Persist exercises + sets sequentially (order matters)
-    for (const ex of exercises) {
-      const { data: seData } = await supabase
-        .from("workout_session_exercises")
-        .insert({
-          session_id: sessionId,
-          exercise_id: ex.exerciseId || null,
-          exercise_name: ex.exerciseName,
-          order_index: ex.orderIndex,
-        })
-        .select("id")
-        .single();
+    if (seErr || !seData) {
+      console.error(`[finishWorkoutSession] falha ao salvar exercício "${ex.exerciseName}":`, seErr?.message);
+      continue;
+    }
 
-      if (!seData) continue;
+    const setsToInsert = ex.sets.map((s) => ({
+      session_exercise_id: seData.id,
+      set_index: s.setIndex,
+      target_reps: s.targetReps,
+      actual_reps: s.actualReps,
+      weight_kg: s.weightKg,
+      completed: s.completed,
+      completed_at: s.completedAt ? new Date(s.completedAt).toISOString() : null,
+    }));
 
-      const setsToInsert = ex.sets.map((s) => ({
-        session_exercise_id: seData.id,
-        set_index: s.setIndex,
-        target_reps: s.targetReps,
-        actual_reps: s.actualReps,
-        weight_kg: s.weightKg,
-        completed: s.completed,
-        completed_at: s.completedAt ? new Date(s.completedAt).toISOString() : null,
-      }));
-
-      if (setsToInsert.length > 0) {
-        await supabase.from("workout_session_sets").insert(setsToInsert);
+    if (setsToInsert.length > 0) {
+      const { error: setsErr } = await supabase.from("workout_session_sets").insert(setsToInsert);
+      if (setsErr) {
+        console.error(`[finishWorkoutSession] falha ao salvar séries de "${ex.exerciseName}":`, setsErr.message);
       }
     }
-  } catch {
-    // Silent — local state is already correct
   }
 }
 

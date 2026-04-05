@@ -104,7 +104,10 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
     // Fire-and-forget persistence — does not block navigation
     if (sessionDbId) {
       finishWorkoutSession(sessionDbId, session.elapsedSeconds, buildFinishPayload()).catch(
-        () => {}
+        (err) => {
+          // TODO: remover este log após estabilização em produção
+          console.error("[ActiveWorkoutSession] falha ao persistir sessão:", err);
+        }
       );
     }
 

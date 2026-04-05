@@ -242,27 +242,28 @@ export async function deleteHabit(id: string): Promise<void> {
 
 /**
  * Upsert a habit log entry for the authenticated user.
- * Silently fails — the optimistic update in the store is the source of truth for the session.
+ * Propaga erros para que o caller possa fazer rollback do estado optimista.
  */
 export async function toggleHabitLog(
   habitId: string,
   date: string,
   completed: boolean
 ): Promise<void> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuário não autenticado");
 
-    await supabase
-      .from("habit_logs")
-      .upsert(
-        { habit_id: habitId, user_id: user.id, date, completed },
-        { onConflict: "habit_id,date" }
-      );
-  } catch {
-    // Intentionally silent — optimistic UI handles the session state
+  const { error } = await supabase
+    .from("habit_logs")
+    .upsert(
+      { habit_id: habitId, user_id: user.id, date, completed },
+      { onConflict: "habit_id,date" }
+    );
+
+  if (error) {
+    console.error("[toggleHabitLog] falha ao salvar hábito:", error.message);
+    throw new Error(`Falha ao salvar hábito: ${error.message}`);
   }
 }

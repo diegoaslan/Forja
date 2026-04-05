@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { MealType, FoodItem, LoggedFood, DayMeals, NutritionTarget } from "@/lib/mock-nutrition";
 import type { MockNutrition } from "@/lib/mock-data";
@@ -322,6 +323,10 @@ export async function addFoodToMeal(
 
     if (itemErr || !item) return null;
 
+    // Revalida as páginas que exibem dados de nutrição
+    revalidatePath("/nutrition");
+    revalidatePath("/home");
+
     return {
       id:        item.id,
       foodItem:  dbFoodToLocal(food as DbFoodItem),
@@ -386,13 +391,18 @@ export async function createFoodItem(data: {
 
 /**
  * Deletes a meal_log_item by id.
- * Silently fails — the optimistic update in the store handles the session state.
  */
 export async function removeFoodFromMeal(mealLogItemId: string): Promise<void> {
   try {
     const supabase = await createClient();
-    await supabase.from("meal_log_items").delete().eq("id", mealLogItemId);
-  } catch {
-    // Intentionally silent
+    const { error } = await supabase.from("meal_log_items").delete().eq("id", mealLogItemId);
+    if (error) {
+      console.error("[removeFoodFromMeal] erro:", error.message);
+      return;
+    }
+    revalidatePath("/nutrition");
+    revalidatePath("/home");
+  } catch (err) {
+    console.error("[removeFoodFromMeal] exceção:", err);
   }
 }

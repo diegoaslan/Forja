@@ -133,17 +133,34 @@ export async function signup(
       actionResult = {
         error: "Não foi possível criar o usuário. Tente novamente.",
       };
-    } else if (data.session) {
-      // Email confirmation disabled → session created → redirect
-      console.log("[signup] sessão criada — vai redirecionar para /home");
-      redirectToHome = true;
     } else {
-      // Email confirmation enabled → waiting for user to confirm
-      console.log("[signup] aguardando confirmação de email");
-      actionResult = {
-        success:
-          "Conta criada! Verifique seu email para confirmar o cadastro antes de entrar.",
-      };
+      // Safety net: garante que o profile existe mesmo se o trigger não estiver ativo
+      // O trigger handle_new_user faz o mesmo via ON CONFLICT DO NOTHING
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert(
+          { id: data.user.id, full_name: result.data.name },
+          { onConflict: "id" }
+        );
+      if (profileError) {
+        // Não bloqueia o signup — o trigger pode já ter criado o profile
+        console.warn("[signup] profile upsert aviso:", profileError.message);
+      } else {
+        console.log("[signup] profile criado/confirmado para userId:", data.user.id);
+      }
+
+      if (data.session) {
+        // Email confirmation disabled → session created → redirect
+        console.log("[signup] sessão criada — vai redirecionar para /home");
+        redirectToHome = true;
+      } else {
+        // Email confirmation enabled → waiting for user to confirm
+        console.log("[signup] aguardando confirmação de email");
+        actionResult = {
+          success:
+            "Conta criada! Verifique seu email para confirmar o cadastro antes de entrar.",
+        };
+      }
     }
   } catch (err) {
     console.error("[signup] exceção não tratada:", err);

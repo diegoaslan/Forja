@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Dumbbell } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { WorkoutDetailHeader } from "@/components/workouts/WorkoutDetailHeader";
 import { ExerciseListItem } from "@/components/workouts/ExerciseListItem";
 import { cn } from "@/lib/utils";

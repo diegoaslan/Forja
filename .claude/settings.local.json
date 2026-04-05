@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"router.refresh\\\\|revalidateTag\\\\|revalidatePath\" /c/Users/Diego Aslan/Desktop/forja/components --include=*.tsx --include=*.ts)",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/Diego Aslan/Desktop/forja -name *store* -type f)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(find /c/Users/Diego Aslan/Desktop/forja -path ./node_modules -prune -o -name *store* -type f -print)",
+      "Bash(grep -E \"store\\\\.\\(ts|tsx\\)$\")"
+    ]
+  }
+}
