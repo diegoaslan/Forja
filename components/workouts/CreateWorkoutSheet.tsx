@@ -20,11 +20,6 @@ const CATEGORIES: Array<{ key: Workout["category"]; label: string }> = [
   { key: "cardio", label: "Cardio"          },
 ];
 
-const MUSCLE_GROUPS = [
-  "Peito", "Costas", "Ombros", "Bíceps", "Tríceps",
-  "Pernas", "Glúteos", "Core", "Panturrilha", "Cardio",
-];
-
 // ── Exercise form item ────────────────────────────────────────────
 
 interface ExerciseItem {
@@ -178,71 +173,28 @@ function StepExercises({
             className="w-full rounded-xl bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
           />
 
-          <div className="flex gap-2 flex-wrap">
-            {MUSCLE_GROUPS.map((mg) => (
-              <button
-                key={mg}
-                type="button"
-                onClick={() => onChange(ex.id, "muscleGroupName", mg)}
-                className={cn(
-                  "rounded-xl px-2.5 py-1 text-xs font-medium transition-colors",
-                  ex.muscleGroupName === mg
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-muted"
-                )}
-              >
-                {mg}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Séries</label>
               <input
                 type="number"
-                min="1" max="10"
+                min="1"
+                max="10"
                 value={ex.targetSets}
                 onChange={(e) => onChange(ex.id, "targetSets", Number(e.target.value))}
                 className="w-full rounded-xl bg-background px-3 py-2 text-sm text-center outline-none"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Reps</label>
+              <label className="text-xs text-muted-foreground">Repetições</label>
               <input
                 type="text"
-                placeholder="8-12"
+                placeholder="Ex: 10-12"
                 value={ex.targetReps}
                 onChange={(e) => onChange(ex.id, "targetReps", e.target.value)}
                 className="w-full rounded-xl bg-background px-3 py-2 text-sm text-center outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Descanso</label>
-              <select
-                value={ex.restSeconds}
-                onChange={(e) => onChange(ex.id, "restSeconds", Number(e.target.value))}
-                className="w-full rounded-xl bg-background px-2 py-2 text-sm outline-none"
-              >
-                {[30, 45, 60, 90, 120, 180, 240].map((s) => (
-                  <option key={s} value={s}>
-                    {s < 60 ? `${s}s` : `${s / 60}min`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Peso padrão (kg) — opcional</label>
-            <input
-              type="number"
-              min="0"
-              value={ex.defaultWeightKg || ""}
-              onChange={(e) => onChange(ex.id, "defaultWeightKg", Number(e.target.value))}
-              placeholder="0"
-              className="w-32 rounded-xl bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
-            />
           </div>
         </div>
       ))}
