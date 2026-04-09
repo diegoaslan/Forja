@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Dumbbell } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { WorkoutDetailHeader } from "@/components/workouts/WorkoutDetailHeader";
+import { WorkoutActions } from "@/components/workouts/WorkoutActions";
 import { ExerciseListItem } from "@/components/workouts/ExerciseListItem";
 import { cn } from "@/lib/utils";
 import { getWorkoutById } from "@/lib/actions/workouts";
@@ -26,8 +27,13 @@ export default async function WorkoutDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-3.5rem)] md:min-h-screen">
-      {/* Header com gradiente */}
-      <WorkoutDetailHeader workout={workout} />
+      {/* Header com gradiente + ações */}
+      <div className="relative">
+        <WorkoutDetailHeader workout={workout} />
+        <div className="absolute top-4 right-4">
+          <WorkoutActions workout={workout} />
+        </div>
+      </div>
 
       {/* Lista de exercícios */}
       <div className="flex-1 px-4 py-5 space-y-2 max-w-lg mx-auto w-full md:max-w-2xl">

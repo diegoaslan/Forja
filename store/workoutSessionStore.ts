@@ -33,8 +33,7 @@ export interface ActiveSession {
   workoutId: string;
   workoutName: string;
   exercises: SessionExercise[];
-  startedAt: number;        // Date.now()
-  elapsedSeconds: number;
+  startedAt: number;        // Date.now() — fonte de verdade para tempo real decorrido
   rest: RestTimer;
   isFinished: boolean;
 }
@@ -59,9 +58,6 @@ interface WorkoutSessionStore {
   startRest: (seconds: number) => void;
   tickRest: () => void;
   dismissRest: () => void;
-
-  // Timer de sessão
-  tickElapsed: () => void;
 
   // Finalizar
   finishSession: () => void;
@@ -100,7 +96,6 @@ export const useWorkoutSession = create<WorkoutSessionStore>((set, get) => ({
         workoutName: workout.name,
         exercises,
         startedAt: Date.now(),
-        elapsedSeconds: 0,
         rest: { active: false, secondsLeft: 0, totalSeconds: 0 },
         isFinished: false,
       },
@@ -206,15 +201,6 @@ export const useWorkoutSession = create<WorkoutSessionStore>((set, get) => ({
         ...session,
         rest: { active: false, secondsLeft: 0, totalSeconds: 0 },
       },
-    });
-  },
-
-  // ── Timer de sessão ───────────────────────────────────────────
-  tickElapsed: () => {
-    const { session } = get();
-    if (!session || session.isFinished) return;
-    set({
-      session: { ...session, elapsedSeconds: session.elapsedSeconds + 1 },
     });
   },
 

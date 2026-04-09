@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Flag, ChevronDown, CheckCircle2 } from "lucide-react";
+import { X, Flag, CheckCircle2 } from "lucide-react";
 import { useWorkoutSession } from "@/store/workoutSessionStore";
 import { ActiveExerciseCard } from "@/components/workouts/ActiveExerciseCard";
 import { SessionProgressBar } from "@/components/workouts/SessionProgressBar";
@@ -20,6 +20,8 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
   const router = useRouter();
   const initialized = useRef(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  // Força re-render a cada segundo para atualizar o display do timer
+  const [, setTick] = useState(0);
 
   const {
     session,
@@ -32,7 +34,6 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
     updateSetWeight,
     tickRest,
     dismissRest,
-    tickElapsed,
     finishSession,
     getTotalSets,
     getCompletedSets,
@@ -54,16 +55,20 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
     };
   }, [workout, initSession, setSessionDbId]);
 
-  // Tick do elapsed timer e do rest timer a cada segundo
+  // Tick a cada segundo: força re-render para atualizar o timer baseado em Date.now()
+  // e avança o timer de descanso. O intervalo não conta segundos — apenas dispara
+  // re-renders. Mesmo que o browser throttle o interval (tela apagada, background),
+  // quando o usuário voltar ao app o tempo correto será exibido imediatamente.
   useEffect(() => {
     const interval = setInterval(() => {
-      tickElapsed();
-      if (session?.rest.active) {
+      setTick((t) => t + 1);
+      // Lê estado diretamente do store (sem criar dependência no efeito)
+      if (useWorkoutSession.getState().session?.rest.active) {
         tickRest();
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [tickElapsed, tickRest, session?.rest.active]);
+  }, [tickRest]);
 
   if (!session) {
     return (
@@ -75,6 +80,10 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
       </div>
     );
   }
+
+  // Tempo real decorrido calculado a partir do timestamp de início.
+  // Robusto contra throttling do browser, re-renders e troca de tela.
+  const elapsedSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
 
   const totalSets = getTotalSets();
   const completedSets = getCompletedSets();
@@ -99,13 +108,16 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
 
   function persistAndExit() {
     if (!session) return;
+
+    // Calcula o tempo real decorrido no momento de finalizar (não usa contador)
+    const finalElapsedSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
+
     finishSession();
 
     // Fire-and-forget persistence — does not block navigation
     if (sessionDbId) {
-      finishWorkoutSession(sessionDbId, session.elapsedSeconds, buildFinishPayload()).catch(
+      finishWorkoutSession(sessionDbId, finalElapsedSeconds, buildFinishPayload()).catch(
         (err) => {
-          // TODO: remover este log após estabilização em produção
           console.error("[ActiveWorkoutSession] falha ao persistir sessão:", err);
         }
       );
@@ -156,7 +168,7 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
           <div className="flex-1 min-w-0 text-center">
             <p className="text-sm font-semibold truncate">{session.workoutName}</p>
             <p className="text-xs font-mono text-muted-foreground">
-              {formatElapsed(session.elapsedSeconds)}
+              {formatElapsed(elapsedSeconds)}
             </p>
           </div>
 
@@ -189,7 +201,7 @@ export function ActiveWorkoutSession({ workout }: ActiveWorkoutSessionProps) {
         <SessionProgressBar
           completedSets={completedSets}
           totalSets={totalSets}
-          elapsedSeconds={session.elapsedSeconds}
+          elapsedSeconds={elapsedSeconds}
         />
       </header>
 

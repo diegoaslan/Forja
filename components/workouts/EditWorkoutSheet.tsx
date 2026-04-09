@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Loader2, ChevronLeft, ChevronUp, ChevronDown } from "lucide-react";
 import { BottomSheet } from "@/components/shared/BottomSheet";
-import { createWorkout } from "@/lib/actions/workouts";
+import { updateWorkout } from "@/lib/actions/workouts";
 import { cn } from "@/lib/utils";
 import type { Workout } from "@/lib/mock-workouts";
 
@@ -20,7 +20,7 @@ const CATEGORIES: Array<{ key: Workout["category"]; label: string }> = [
   { key: "cardio", label: "Cardio"          },
 ];
 
-// ── Exercise form item ────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────
 
 interface ExerciseItem {
   id: string;
@@ -46,10 +46,11 @@ function newExercise(): ExerciseItem {
   };
 }
 
-// ── Step 1: Workout details ───────────────────────────────────────
+// ── Step 1: detalhes ──────────────────────────────────────────────
 
 function StepDetails({
-  name, setName, category, setCategory, description, setDescription, estimatedMinutes, setEstimatedMinutes, onNext,
+  name, setName, category, setCategory, description, setDescription,
+  estimatedMinutes, setEstimatedMinutes, onNext,
 }: {
   name: string; setName: (v: string) => void;
   category: Workout["category"]; setCategory: (v: Workout["category"]) => void;
@@ -134,7 +135,7 @@ function StepDetails({
   );
 }
 
-// ── Step 2: Exercises ─────────────────────────────────────────────
+// ── Step 2: exercícios ────────────────────────────────────────────
 
 function StepExercises({
   exercises, onChange, onAdd, onRemove, onMoveUp, onMoveDown, saving, onSave,
@@ -281,31 +282,59 @@ function StepExercises({
         className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        {saving ? "Salvando..." : "Criar treino"}
+        {saving ? "Salvando..." : "Salvar alterações"}
       </button>
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────
 
-export function CreateWorkoutButton() {
+interface EditWorkoutSheetProps {
+  workout: Workout;
+  open: boolean;
+  onClose: () => void;
+}
+
+function workoutToExercises(workout: Workout): ExerciseItem[] {
+  return workout.exercises.map((we) => ({
+    id: we.id,
+    name: we.exercise.name,
+    muscleGroupName: we.exercise.muscleGroup.name ?? "",
+    targetSets: we.targetSets,
+    targetReps: we.targetReps,
+    restSeconds: we.restSeconds,
+    defaultWeightKg: we.defaultWeightKg,
+    notes: we.notes ?? "",
+  }));
+}
+
+export function EditWorkoutSheet({ workout, open, onClose }: EditWorkoutSheetProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"details" | "exercises">("details");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<Workout["category"]>("push");
-  const [description, setDescription] = useState("");
-  const [estimatedMinutes, setEstimatedMinutes] = useState(45);
-  const [exercises, setExercises] = useState<ExerciseItem[]>([]);
+  const [name, setName] = useState(workout.name);
+  const [category, setCategory] = useState<Workout["category"]>(workout.category);
+  const [description, setDescription] = useState(workout.description ?? "");
+  const [estimatedMinutes, setEstimatedMinutes] = useState(workout.estimatedMinutes);
+  const [exercises, setExercises] = useState<ExerciseItem[]>(() => workoutToExercises(workout));
 
-  function close() {
-    setOpen(false);
-    setStep("details");
-    setName(""); setCategory("push"); setDescription(""); setEstimatedMinutes(45); setExercises([]);
-  }
+  // Sincroniza estado do form com os dados atuais do treino toda vez que o sheet abre.
+  // Garante que após um save + router.refresh(), reabrir o sheet mostra dados frescos.
+  useEffect(() => {
+    if (open) {
+      setStep("details");
+      setError(null);
+      setName(workout.name);
+      setCategory(workout.category);
+      setDescription(workout.description ?? "");
+      setEstimatedMinutes(workout.estimatedMinutes);
+      setExercises(workoutToExercises(workout));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function changeExercise(id: string, field: keyof ExerciseItem, value: string | number) {
     setExercises((prev) =>
@@ -327,8 +356,10 @@ export function CreateWorkoutButton() {
 
   async function handleSave() {
     if (saving) return;
+    setError(null);
     setSaving(true);
-    const id = await createWorkout({
+
+    const result = await updateWorkout(workout.id, {
       name: name.trim(),
       category,
       description,
@@ -345,63 +376,64 @@ export function CreateWorkoutButton() {
           notes: ex.notes,
         })),
     });
+
     setSaving(false);
-    if (id) {
-      close();
-      router.refresh();
+
+    if (result.error) {
+      setError(result.error);
+      return;
     }
+
+    onClose();
+    router.refresh();
   }
 
-  const stepTitles = { details: "Novo treino", exercises: "Exercícios" };
+  const stepTitles = { details: "Editar treino", exercises: "Exercícios" };
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Novo
-      </button>
-
-      <BottomSheet open={open} onClose={close}>
-        {/* Custom header */}
-        <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
-          {step === "exercises" && (
-            <button
-              type="button"
-              onClick={() => setStep("details")}
-              className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-          <h2 className="text-base font-semibold flex-1">{stepTitles[step]}</h2>
-        </div>
-
-        {step === "details" && (
-          <StepDetails
-            name={name} setName={setName}
-            category={category} setCategory={setCategory}
-            description={description} setDescription={setDescription}
-            estimatedMinutes={estimatedMinutes} setEstimatedMinutes={setEstimatedMinutes}
-            onNext={() => setStep("exercises")}
-          />
-        )}
+    <BottomSheet open={open} onClose={onClose}>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
         {step === "exercises" && (
-          <StepExercises
-            exercises={exercises}
-            onChange={changeExercise}
-            onAdd={() => setExercises((prev) => [...prev, newExercise()])}
-            onRemove={(id) => setExercises((prev) => prev.filter((e) => e.id !== id))}
-            onMoveUp={(id) => moveExercise(id, "up")}
-            onMoveDown={(id) => moveExercise(id, "down")}
-            saving={saving}
-            onSave={handleSave}
-          />
+          <button
+            type="button"
+            onClick={() => setStep("details")}
+            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
         )}
-      </BottomSheet>
-    </>
+        <h2 className="text-base font-semibold flex-1">{stepTitles[step]}</h2>
+      </div>
+
+      {error && (
+        <p className="mx-4 mt-3 rounded-xl bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      {step === "details" && (
+        <StepDetails
+          name={name} setName={setName}
+          category={category} setCategory={setCategory}
+          description={description} setDescription={setDescription}
+          estimatedMinutes={estimatedMinutes} setEstimatedMinutes={setEstimatedMinutes}
+          onNext={() => setStep("exercises")}
+        />
+      )}
+
+      {step === "exercises" && (
+        <StepExercises
+          exercises={exercises}
+          onChange={changeExercise}
+          onAdd={() => setExercises((prev) => [...prev, newExercise()])}
+          onRemove={(id) => setExercises((prev) => prev.filter((e) => e.id !== id))}
+          onMoveUp={(id) => moveExercise(id, "up")}
+          onMoveDown={(id) => moveExercise(id, "down")}
+          saving={saving}
+          onSave={handleSave}
+        />
+      )}
+    </BottomSheet>
   );
 }

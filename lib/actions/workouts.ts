@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Workout, WorkoutExercise, Exercise, MuscleGroup } from "@/lib/mock-workouts";
 import type { MockWorkout } from "@/lib/mock-data";
@@ -234,6 +235,18 @@ export async function getWorkoutById(id: string): Promise<Workout | null> {
   }
 }
 
+// ── ExercisePayload shared type ───────────────────────────────────
+
+type ExercisePayload = {
+  name: string;
+  muscleGroupName: string;
+  targetSets: number;
+  targetReps: string;
+  restSeconds: number;
+  defaultWeightKg: number;
+  notes?: string;
+};
+
 // ── Workout CRUD ──────────────────────────────────────────────────
 
 export async function createWorkout(data: {
@@ -241,14 +254,7 @@ export async function createWorkout(data: {
   category: DbWorkout["category"];
   description: string;
   estimatedMinutes: number;
-  exercises: Array<{
-    name: string;
-    muscleGroupName: string;
-    targetSets: number;
-    targetReps: string;
-    restSeconds: number;
-    defaultWeightKg: number;
-  }>;
+  exercises: ExercisePayload[];
 }): Promise<string | null> {
   try {
     const supabase = await createClient();
@@ -271,79 +277,157 @@ export async function createWorkout(data: {
 
     if (wErr || !workout) return null;
 
-    for (let i = 0; i < data.exercises.length; i++) {
-      const ex = data.exercises[i];
+    await upsertExercises(
+      supabase,
+      user.id,
+      workout.id,
+      data.exercises.filter((ex) => ex.name.trim()),
+    );
 
-      // Muscle groups são dados globais (somente leitura para usuários).
-      // Apenas faz SELECT — nunca INSERT (RLS bloqueia escrita para usuários comuns).
-      let muscleGroupId: string | null = null;
-      if (ex.muscleGroupName.trim()) {
-        const { data: existing } = await supabase
-          .from("muscle_groups")
-          .select("id")
-          .eq("name", ex.muscleGroupName.trim())
-          .maybeSingle();
-        muscleGroupId = existing?.id ?? null;
-      }
-
-      // Find or create exercise by name
-      const { data: existingEx } = await supabase
-        .from("exercises")
-        .select("id")
-        .eq("name", ex.name.trim())
-        .maybeSingle();
-
-      let exerciseId: string | null = null;
-      if (existingEx) {
-        exerciseId = existingEx.id;
-      } else {
-        // user_id obrigatório: RLS exige user_id = auth.uid() no INSERT
-        const { data: createdEx, error: exErr } = await supabase
-          .from("exercises")
-          .insert({ user_id: user.id, name: ex.name.trim(), muscle_group_id: muscleGroupId })
-          .select("id")
-          .single();
-        if (exErr) {
-          console.error(`[createWorkout] falha ao criar exercício "${ex.name}":`, exErr.message);
-        }
-        exerciseId = createdEx?.id ?? null;
-      }
-
-      if (!exerciseId) {
-        console.warn(`[createWorkout] exercício ignorado (sem id): "${ex.name}"`);
-        continue;
-      }
-
-      const { error: weErr } = await supabase.from("workout_exercises").insert({
-        workout_id: workout.id,
-        exercise_id: exerciseId,
-        order_index: i,
-        target_sets: ex.targetSets,
-        target_reps: ex.targetReps,
-        rest_seconds: ex.restSeconds,
-        default_weight_kg: ex.defaultWeightKg || null,
-      });
-      if (weErr) {
-        console.error(`[createWorkout] falha ao vincular exercício "${ex.name}" ao treino:`, weErr.message);
-      }
-    }
-
+    revalidatePath("/workouts");
     return workout.id;
   } catch {
     return null;
   }
 }
 
-export async function deleteWorkout(id: string): Promise<void> {
+export async function deleteWorkout(id: string): Promise<{ error?: string }> {
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("workouts").delete().eq("id", id).eq("user_id", user.id);
-  } catch {
-    // Intentionally silent
+    if (!user) return { error: "Não autenticado" };
+
+    const { error } = await supabase
+      .from("workouts")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("[deleteWorkout] erro:", error.message);
+      return { error: error.message };
+    }
+
+    revalidatePath("/workouts");
+    return {};
+  } catch (err) {
+    console.error("[deleteWorkout] exceção:", err);
+    return { error: "Erro ao excluir treino" };
+  }
+}
+
+async function upsertExercises(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  workoutId: string,
+  exercises: ExercisePayload[],
+): Promise<void> {
+  // DELETE all existing workout_exercises for this workout (cascade-safe)
+  await supabase.from("workout_exercises").delete().eq("workout_id", workoutId);
+
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i];
+
+    let muscleGroupId: string | null = null;
+    if (ex.muscleGroupName.trim()) {
+      const { data: existing } = await supabase
+        .from("muscle_groups")
+        .select("id")
+        .eq("name", ex.muscleGroupName.trim())
+        .maybeSingle();
+      muscleGroupId = existing?.id ?? null;
+    }
+
+    const { data: existingEx } = await supabase
+      .from("exercises")
+      .select("id")
+      .eq("name", ex.name.trim())
+      .maybeSingle();
+
+    let exerciseId: string | null = null;
+    if (existingEx) {
+      exerciseId = existingEx.id;
+    } else {
+      const { data: createdEx, error: exErr } = await supabase
+        .from("exercises")
+        .insert({ user_id: userId, name: ex.name.trim(), muscle_group_id: muscleGroupId })
+        .select("id")
+        .single();
+      if (exErr) {
+        console.error(`[upsertExercises] falha ao criar exercício "${ex.name}":`, exErr.message);
+      }
+      exerciseId = createdEx?.id ?? null;
+    }
+
+    if (!exerciseId) {
+      console.warn(`[upsertExercises] exercício ignorado (sem id): "${ex.name}"`);
+      continue;
+    }
+
+    const { error: weErr } = await supabase.from("workout_exercises").insert({
+      workout_id: workoutId,
+      exercise_id: exerciseId,
+      order_index: i,
+      target_sets: ex.targetSets,
+      target_reps: ex.targetReps,
+      rest_seconds: ex.restSeconds,
+      default_weight_kg: ex.defaultWeightKg || null,
+      notes: ex.notes?.trim() || null,
+    });
+    if (weErr) {
+      console.error(`[upsertExercises] falha ao vincular "${ex.name}":`, weErr.message);
+    }
+  }
+}
+
+export async function updateWorkout(
+  id: string,
+  data: {
+    name: string;
+    category: DbWorkout["category"];
+    description: string;
+    estimatedMinutes: number;
+    exercises: ExercisePayload[];
+  },
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "Não autenticado" };
+
+    const { error: wErr } = await supabase
+      .from("workouts")
+      .update({
+        name: data.name.trim(),
+        category: data.category,
+        description: data.description.trim() || null,
+        estimated_minutes: data.estimatedMinutes,
+      })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (wErr) {
+      console.error("[updateWorkout] erro ao atualizar treino:", wErr.message);
+      return { error: wErr.message };
+    }
+
+    await upsertExercises(
+      supabase,
+      user.id,
+      id,
+      data.exercises.filter((ex) => ex.name.trim()),
+    );
+
+    revalidatePath("/workouts");
+    revalidatePath(`/workouts/${id}`);
+    return {};
+  } catch (err) {
+    console.error("[updateWorkout] exceção:", err);
+    return { error: "Erro ao atualizar treino" };
   }
 }
 
