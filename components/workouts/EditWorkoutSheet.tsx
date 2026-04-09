@@ -390,22 +390,23 @@ export function EditWorkoutSheet({ workout, open, onClose }: EditWorkoutSheetPro
 
   const stepTitles = { details: "Editar treino", exercises: "Exercícios" };
 
-  return (
-    <BottomSheet open={open} onClose={onClose}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
-        {step === "exercises" && (
-          <button
-            type="button"
-            onClick={() => setStep("details")}
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-        )}
-        <h2 className="text-base font-semibold flex-1">{stepTitles[step]}</h2>
-      </div>
+  const sheetHeader = (
+    <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
+      {step === "exercises" && (
+        <button
+          type="button"
+          onClick={() => setStep("details")}
+          className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+      <h2 className="text-base font-semibold flex-1">{stepTitles[step]}</h2>
+    </div>
+  );
 
+  return (
+    <BottomSheet open={open} onClose={onClose} header={sheetHeader}>
       {error && (
         <p className="mx-4 mt-3 rounded-xl bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {error}

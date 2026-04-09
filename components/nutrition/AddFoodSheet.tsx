@@ -51,10 +51,12 @@ function StepFood({
 }) {
   const foods = filteredFoods(foodItems, search);
 
+  // Sem scroll próprio: o BottomSheet já tem overflow-y-auto no container de conteúdo.
+  // A barra de busca usa sticky para ficar visível ao rolar a lista.
   return (
-    <div className="flex flex-col h-full">
-      {/* Search bar */}
-      <div className="px-4 pb-3 pt-1 shrink-0">
+    <div>
+      {/* Search bar — sticky no topo do scroll container do BottomSheet */}
+      <div className="sticky top-0 z-10 bg-card px-4 pb-3 pt-1">
         <div className="flex items-center gap-2 bg-muted rounded-xl px-3 h-10">
           <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
@@ -68,8 +70,8 @@ function StepFood({
         </div>
       </div>
 
-      {/* List */}
-      <div className="overflow-y-auto divide-y divide-border px-0">
+      {/* Lista — flui normalmente no scroll do BottomSheet */}
+      <div className="divide-y divide-border">
         {foods.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-8 px-4">
             Nenhum alimento encontrado
@@ -393,26 +395,26 @@ export function AddFoodSheet() {
     selectFood(food); // navigate to quantity step with the new food pre-selected
   }
 
+  const backHeader = canGoBack ? (
+    <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
+      <button
+        type="button"
+        onClick={handleBack}
+        className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <h2 className="text-base font-semibold flex-1">{stepTitles[sheetStep]}</h2>
+    </div>
+  ) : undefined;
+
   return (
     <BottomSheet
       open={sheetOpen}
       onClose={handleClose}
       title={canGoBack ? undefined : stepTitles[sheetStep]}
+      header={backHeader}
     >
-      {/* Custom header with back button */}
-      {canGoBack && (
-        <div className="flex items-center gap-2 px-4 py-3 shrink-0">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <h2 className="text-base font-semibold flex-1">{stepTitles[sheetStep]}</h2>
-        </div>
-      )}
-
       {sheetStep === "meal" && <StepMeal onSelect={selectMeal} />}
 
       {sheetStep === "food" && (

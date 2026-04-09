@@ -354,6 +354,21 @@ export function CreateWorkoutButton() {
 
   const stepTitles = { details: "Novo treino", exercises: "Exercícios" };
 
+  const sheetHeader = (
+    <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
+      {step === "exercises" && (
+        <button
+          type="button"
+          onClick={() => setStep("details")}
+          className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+      <h2 className="text-base font-semibold flex-1">{stepTitles[step]}</h2>
+    </div>
+  );
+
   return (
     <>
       <button
@@ -365,21 +380,7 @@ export function CreateWorkoutButton() {
         Novo
       </button>
 
-      <BottomSheet open={open} onClose={close}>
-        {/* Custom header */}
-        <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-border">
-          {step === "exercises" && (
-            <button
-              type="button"
-              onClick={() => setStep("details")}
-              className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-          <h2 className="text-base font-semibold flex-1">{stepTitles[step]}</h2>
-        </div>
-
+      <BottomSheet open={open} onClose={close} header={sheetHeader}>
         {step === "details" && (
           <StepDetails
             name={name} setName={setName}
