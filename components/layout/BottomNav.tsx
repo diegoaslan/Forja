@@ -2,35 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Dumbbell, Utensils, TrendingUp, User } from "lucide-react";
+import { Home, Dumbbell, Utensils, CheckSquare, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  {
-    label: "Home",
-    href: "/home",
-    icon: Home,
-  },
-  {
-    label: "Treino",
-    href: "/workouts",
-    icon: Dumbbell,
-  },
-  {
-    label: "Dieta",
-    href: "/nutrition",
-    icon: Utensils,
-  },
-  {
-    label: "Progresso",
-    href: "/progress",
-    icon: TrendingUp,
-  },
-  {
-    label: "Perfil",
-    href: "/profile",
-    icon: User,
-  },
+  { label: "Home",      href: "/home",      icon: Home        },
+  { label: "Treinos",   href: "/workouts",  icon: Dumbbell    },
+  { label: "Dieta",     href: "/nutrition", icon: Utensils    },
+  { label: "Hábitos",   href: "/habits",    icon: CheckSquare },
+  { label: "Progresso", href: "/progress",  icon: TrendingUp  },
 ];
 
 export function BottomNav() {
@@ -55,10 +35,7 @@ export function BottomNav() {
               )}
             >
               <Icon
-                className={cn(
-                  "h-5 w-5 transition-transform",
-                  isActive && "scale-110"
-                )}
+                className={cn("h-5 w-5 transition-transform", isActive && "scale-110")}
                 strokeWidth={isActive ? 2.5 : 1.8}
               />
               <span

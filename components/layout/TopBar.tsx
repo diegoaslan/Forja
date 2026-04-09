@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, Flame, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useUser } from "@/hooks/useUser";
 
 const pageTitles: Record<string, string> = {
   "/home":       "Forja",
@@ -30,9 +32,19 @@ function getParentPath(pathname: string): string | null {
 
 export function TopBar() {
   const pathname = usePathname();
+  const { user } = useUser();
   const isHome = pathname === "/home";
+  const isProfile = pathname === "/profile";
   const parentPath = getParentPath(pathname);
   const title = getPageTitle(pathname);
+
+  const fullName =
+    user?.user_metadata?.full_name ??
+    user?.email?.split("@")[0] ??
+    "";
+  const initials = fullName
+    ? fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center border-b border-border bg-card/95 backdrop-blur-md md:hidden pt-safe">
@@ -61,17 +73,36 @@ export function TopBar() {
           )}
         </div>
 
-        {/* Ação do lado direito */}
-        {isHome && (
-          <button className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-            "hover:bg-muted transition-colors relative"
-          )}>
-            <Bell className="h-5 w-5" strokeWidth={1.8} />
-            {/* Badge de notificação — placeholder */}
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
-          </button>
-        )}
+        {/* Ações à direita */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Notificações — apenas na home */}
+          {isHome && (
+            <button
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-xl",
+                "hover:bg-muted transition-colors relative"
+              )}
+            >
+              <Bell className="h-5 w-5" strokeWidth={1.8} />
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
+            </button>
+          )}
+
+          {/* Avatar de perfil — em todas as páginas, exceto na própria tela de Perfil */}
+          {!isProfile && (
+            <Link
+              href="/profile"
+              aria-label="Ir para perfil"
+              className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-muted transition-colors"
+            >
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="gradient-primary text-white text-[10px] font-bold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
+          )}
+        </div>
       </div>
     </header>
   );
