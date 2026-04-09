@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Loader2 } from "lucide-react";
 import { deleteWorkout } from "@/lib/actions/workouts";
@@ -53,8 +54,8 @@ export function WorkoutActions({ workout }: WorkoutActionsProps) {
         </button>
       </div>
 
-      {/* Dialog de confirmação de exclusão */}
-      {confirmDelete && (
+      {/* Dialog de confirmação de exclusão — portal para escapar do scroll container */}
+      {confirmDelete && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl space-y-4">
             <div className="space-y-1.5">
@@ -91,7 +92,8 @@ export function WorkoutActions({ workout }: WorkoutActionsProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Sheet de edição */}

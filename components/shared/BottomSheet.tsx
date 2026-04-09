@@ -1,18 +1,37 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+/**
+ * BottomSheet — overlay deslizante de baixo para cima.
+ *
+ * POR QUE createPortal?
+ * O AppShell usa <main className="overflow-y-auto"> como scroll container.
+ * No iOS Safari, `position: fixed` dentro de overflow:scroll/auto é clipado
+ * ao bounds do container, não ao viewport — o backdrop não cobre a tela toda
+ * e o painel aparece "cortado". createPortal move o sheet para document.body,
+ * escapando de qualquer scroll container ancestral, garantindo que
+ * `position: fixed` funcione corretamente em todos os browsers.
+ *
+ * ESTRUTURA DE FLEX SCROLL:
+ * O painel usa `max-h-[90dvh] flex flex-col overflow-hidden`.
+ * O overflow-hidden no pai é obrigatório: sem ele, o filho `flex-1 min-h-0`
+ * com flex-basis:0 contribui 0px ao tamanho intrínseco do flex container,
+ * resultando em scroll container de 0px de altura.
+ */
+
+import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BottomSheetProps {
   open: boolean;
   onClose: () => void;
-  /** Texto simples no header — gera título + botão X automaticamente. */
+  /** Texto simples: gera título + botão X no header. */
   title?: string;
   /**
-   * Header customizado (ReactNode). Renderizado fora do scroll container,
-   * entre o handle bar e o conteúdo rolável. Use isso quando precisar de
-   * botão de voltar, multi-step, ou qualquer header que não deve rolar.
+   * Header customizado — renderizado fora do scroll container,
+   * entre o handle bar e o conteúdo. Ideal para multi-step com botão
+   * de voltar, ou qualquer header que não deve rolar com o conteúdo.
    */
   header?: ReactNode;
   children: ReactNode;
@@ -27,76 +46,54 @@ export function BottomSheet({
   children,
   className,
 }: BottomSheetProps) {
-  const sheetRef = useRef<HTMLDivElement>(null);
-  // Guarda a posição do scroll do body para restaurar ao fechar (iOS fix)
-  const savedScrollY = useRef(0);
-
-  // Fecha ao clicar fora do painel
-  function handleBackdrop(e: React.MouseEvent<HTMLDivElement>) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
-  // Fecha no Escape
+  // Fecha ao pressionar Escape
   useEffect(() => {
     if (!open) return;
-    function onKeyDown(e: KeyboardEvent) {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-    }
+    };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // Body scroll lock — compatível com iOS Safari.
-  // Usa position:fixed no body para evitar o bug do iOS onde
-  // overflow:hidden não impede scroll por toque.
+  // Trava scroll do body enquanto o sheet está aberto.
+  // overflow:hidden é suficiente — o backdrop cobre o conteúdo, tornando
+  // o scroll de background invisível ao usuário.
   useEffect(() => {
-    if (open) {
-      savedScrollY.current = window.scrollY;
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${savedScrollY.current}px`;
-      document.body.style.width = "100%";
-      document.body.style.overflowY = "scroll"; // evita layout shift pela scrollbar
-    } else {
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      document.body.style.overflowY = "";
-      window.scrollTo(0, savedScrollY.current);
-    }
+    if (!open) return;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      document.body.style.overflowY = "";
+      document.body.style.overflow = "";
     };
   }, [open]);
 
   if (!open) return null;
 
-  return (
+  // createPortal: renderiza o sheet como filho direto de document.body,
+  // fora de qualquer scroll container do app.
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={handleBackdrop}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
-        ref={sheetRef}
         className={cn(
-          // overflow-hidden é obrigatório: sem ele, flex-1 no filho scrollável
-          // fica com 0px de altura porque o pai não tem altura definida — só
-          // max-height. Com overflow-hidden, o navegador corretamente distribui
-          // o espaço restante para o filho flex-1.
           "w-full max-w-lg bg-card rounded-t-3xl shadow-2xl",
           "animate-in slide-in-from-bottom duration-300",
+          // overflow-hidden + flex flex-col + max-h: trio obrigatório para
+          // que flex-1 no filho scrollável receba altura correta.
           "max-h-[90dvh] flex flex-col overflow-hidden",
           className
         )}
       >
-        {/* Handle bar */}
+        {/* Handle bar — indicador visual de drag */}
         <div className="flex items-center justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
         </div>
 
-        {/* Header gerado pelo prop title (com botão X) */}
+        {/* Header gerado automaticamente pelo prop title */}
         {title && (
           <div className="flex items-center justify-between px-5 py-3 shrink-0 border-b border-border">
             <h2 className="text-base font-semibold">{title}</h2>
@@ -110,17 +107,17 @@ export function BottomSheet({
           </div>
         )}
 
-        {/* Header customizado (fora do scroll — não rola com o conteúdo) */}
+        {/* Header customizado — fora do scroll, não some ao rolar */}
         {header}
 
         {/* Área de conteúdo rolável.
-            flex-1 + min-h-0 + overflow-y-auto: padrão correto para scroll
-            dentro de flex column. O overflow-hidden no pai garante que o
-            flex-1 receba a altura restante corretamente. */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            pb-safe: padding na safe area do iPhone (home indicator).
+            overscroll-contain: impede que o scroll vaze para o backdrop. */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-safe">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
